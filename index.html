@@ -499,6 +499,42 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if(['ArrowLeft','Backspace','PageUp','ArrowUp'].indexOf(e.key)>-1){e.preventDefault();prev()}
     if(e.key==='Home'){e.preventDefault();goHome()}
   });
+  // Scroll / swipe to move between slides. One gesture moves exactly one slide:
+  // a trackpad flick emits a long tail of decaying events, so we fire once on
+  // the threshold and stay disarmed until the wheel has been quiet for a moment.
+  function notesScrollable(){
+    if(!notesMode)return false;
+    var n=document.getElementById('notes');
+    return !!n&&n.scrollHeight>n.clientHeight+4;
+  }
+  var wheelSum=0,wheelLast=0,wheelArmed=true;
+  addEventListener('wheel',function(e){
+    if(notesScrollable())return;                 // let the script scroll instead
+    var now=performance.now();
+    if(now-wheelLast>260){wheelSum=0;wheelArmed=true}
+    wheelLast=now;
+    if(!wheelArmed)return;
+    wheelSum+=e.deltaY;
+    if(Math.abs(wheelSum)<45)return;
+    wheelArmed=false;
+    (wheelSum>0?next:prev)();
+    wheelSum=0;
+  },{passive:true});
+
+  var tsY=null,tsX=0,tsT=0;
+  addEventListener('touchstart',function(e){
+    if(e.touches.length!==1||notesScrollable()){tsY=null;return}
+    tsY=e.touches[0].clientY;tsX=e.touches[0].clientX;tsT=performance.now();
+  },{passive:true});
+  addEventListener('touchend',function(e){
+    if(tsY===null)return;
+    var t=e.changedTouches[0],dy=tsY-t.clientY,dx=Math.abs(tsX-t.clientX);
+    tsY=null;
+    if(performance.now()-tsT>700)return;          // a slow drag is not a swipe
+    if(Math.abs(dy)<50||dx>Math.abs(dy))return;   // must be mostly vertical
+    (dy>0?next:prev)();
+  },{passive:true});
+
   motionQuery.addEventListener('change',function(e){
     reduce=e.matches;
     if(reduce){cancelBuild();setP(cursi,steps[cur].p)}
